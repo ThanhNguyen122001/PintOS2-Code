@@ -86,7 +86,7 @@ start_process (void *file_name_)
   // Push arguments onto the stack
   void *esp = if_.esp;
   uint8_t *null_ptr = NULL;
-  for (int i = argc - 1; i >= 0; i--)
+  for (i = argc - 1; i >= 0; i--)
   {
     esp -= (strlen(argv[i]) + 1);
     memcpy(esp, argv[i], strlen(argv[i]) + 1);
@@ -500,7 +500,7 @@ setup_stack (void **esp, char * file_name)
     argc++;
 
 
-  int *argv = calloc(argc,sizeof(int));
+  char **argv = calloc(argc,sizeof(char *));
 
   for (token = strtok_r (file_name, " ", &save_ptr),i=0; token != NULL;
     token = strtok_r (NULL, " ", &save_ptr),i++)
@@ -508,7 +508,7 @@ setup_stack (void **esp, char * file_name)
       *esp -= strlen(token) + 1;
       memcpy(*esp,token,strlen(token) + 1);
 
-      argv[i]=*esp;
+      argv[i]= *esp;
     }
 
   while((int)*esp%4!=0)
@@ -525,12 +525,12 @@ setup_stack (void **esp, char * file_name)
 
   for(i=argc-1;i>=0;i--)
   {
-    *esp-=sizeof(int);
-    memcpy(*esp,&argv[i],sizeof(int));
+    *esp-=sizeof(char *);
+    memcpy(*esp,&argv[i],sizeof(char *));
   }
 
-  int pt = *esp;
-  *esp-=sizeof(int);
+  char **pt = *esp;
+  *esp-=sizeof(char **);
   memcpy(*esp,&pt,sizeof(int));
 
   *esp-=sizeof(int);
@@ -539,7 +539,8 @@ setup_stack (void **esp, char * file_name)
   *esp-=sizeof(int);
   memcpy(*esp,&zero,sizeof(int));
 
-  hex_dump(*esp, *esp, PHYS_BASE - (*esp), true);
+  free(copy);
+  free(argv);
 
   return success;
 }
