@@ -60,20 +60,22 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
-char *token, *saveptr;
-int argc = 0;
-char *argv[128];
+  // Tokenize the arguments and push them onto the stack
+  char *token, *saveptr;
+  int argc = 0;
+  char *argv[128]; // Assuming max number of arguments is 128
 
-for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr)){
-  argv[argc++] = token;
-}
+  for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
+  {
+    argv[argc++] = token;
+  }
 
-/* Initialize interrupt frame and load executable. */
+  /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (argv[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -92,9 +94,8 @@ for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r
 
   // Word align
   while ((uintptr_t)esp % 4 != 0)
-  {
-    esp -= sizeof(char);
-    memcpy(esp, &null_ptr, sizeof(char));
+  {  esp -= sizeof(uint8_t);
+    memcpy(esp, &null_ptr, sizeof(uint8_t));
   }
 
   // Push pointers to the arguments
@@ -120,18 +121,8 @@ for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r
   memcpy(esp, &null_ptr, sizeof(void *));
 
   // Set the final value of the stack pointer
-  if_.esp = esp;
-
-  /* Start the user process by simulating a return from an
-     interrupt, implemented by intr_exit (in
-     threads/intr-stubs.S).  Because intr_exit takes all of its
-     arguments on the stack in the form of a `struct intr_frame',
-     we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
-  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-  NOT_REACHED ();
+  if_.esp = esp;  
 }
-
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
