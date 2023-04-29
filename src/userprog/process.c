@@ -462,19 +462,22 @@ setup_stack (void **esp, int argc, char *argv[])
     success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
     if(success){
       *esp = PHYS_BASE - 12;
-      uint32_t * arg_val_ptr[argc];
+      uint32_t *arg_val_ptr[argc];
       for(i = argc - 1; i >= 0; i--){
         *esp = *esp - sizeof(char)*(strlen(argv[i]) + 1);
         memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i]) + 1));
         arg_val_ptr[i] = (uint32_t*)*esp;
       }
+
       *esp = *esp - 4;
       (*(int*)(*esp)) = 0;
       *esp = *esp - 4;
+
       for(i = argc - 1; i >= 0; i--){
         (*(uint32_t **)(*esp)) = arg_val_ptr[i];
         *esp = *esp - 4;
       }
+      
       (*(uintptr_t **)(*esp)) = *esp + 4;
       *esp = *esp - 4;
       *(int*)(*esp) = argc;
