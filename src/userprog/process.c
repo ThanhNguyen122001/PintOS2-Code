@@ -64,7 +64,7 @@ start_process (void *file_name_)
 
   //In Sun
   char *saveptr;
-  file_name = strtok_r((char*)file_name, " ", &saveptr);
+  file_name = strtok_r((char*)file_name_, " ", &saveptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -456,13 +456,14 @@ setup_stack (void **esp, int argc, char *argv[])
   uint8_t *kpage;
   bool success = false;
   kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  int i;
   
   if(kpage != NULL){
     success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
     if(success){
       *esp = PHYS_BASE - 12;
       uint32_t * arg_val_ptr[argc];
-      for(int i = argc - 1; i >= 0; i--){
+      for(i = argc - 1; i >= 0; i--){
         *esp = *esp - sizeof(char)*(strlen(argv[i]) + 1);
         memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i]) + 1));
         arg_val_ptr[i] = (uint32_t*)*esp;
