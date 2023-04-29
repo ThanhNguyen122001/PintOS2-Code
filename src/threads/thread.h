@@ -97,6 +97,7 @@ struct thread
    struct lock *wait_on_lock;           /* lock that thread is waiting for get */
    struct list donations;               /* list of threads that donate their priority */
    struct list_elem donation_elem;      /* element for manage the list donations */
+   struct list child_processes;
 
    int nice;                            /* value for nice */
    int recent_cpu;                      /* value for recent_cpu */
@@ -107,6 +108,7 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    int exit_status;
 #endif
 
     /* Owned by thread.c. */

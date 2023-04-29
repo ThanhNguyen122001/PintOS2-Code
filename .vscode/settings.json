@@ -1,5 +1,8 @@
 {
     "files.associations": {
-        "pagedir.h": "c"
+        "pagedir.h": "c",
+        "syscall-nr.h": "c",
+        "stdio.h": "c",
+        "interrupt.h": "c"
     }
 }
