@@ -107,34 +107,11 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct list childStatsList;
-    struct thread *curr_thread_parent;
-    struct list fileDescList;
-    struct semaphore lockForChildL;
-    struct semaphore lockForChildE;
-    struct semaphore parentAlarm;
-    struct lock tempLock;
-    bool loadFail;
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
-
-struct childStats
-{
-   struct list_elem me;
-   tid_t childTid;
-   int exitStat;
-   struct thread *me_thread;
-};
-
-struct fileDesc
-{
-   struct list_elem me;
-   int index;
-   struct file *curr_file;
-};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

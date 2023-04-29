@@ -68,7 +68,7 @@ for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r
   argv[argc++] = token;
 }
 
-  /* Initialize interrupt frame and load executable. */
+/* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
@@ -121,7 +121,7 @@ for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r
 
   // Set the final value of the stack pointer
   if_.esp = esp;
-  
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
