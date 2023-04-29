@@ -144,33 +144,33 @@ start_process (void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-  struct thread *cur = thread_current();
-  struct list_elem *e;
+  // struct thread *cur = thread_current();
+  // struct list_elem *e;
 
-  for (e = list_begin(&cur->child_processes); e != list_end(&cur->child_processes);
-       e = list_next(e))
-  {
-    struct child_process *cp = list_entry(e, struct child_process, elem);
-    if (cp->tid == child_tid)
-    {
-      // Check if the child's name starts with "args_"
-      if (strncmp(cur->name, "args_", 5) == 0)
-      {
-        // Wait for the child process
-        if (!cp->waited)
-        {
-          cp->waited = true;
-          sema_down(&cp->sema_terminated);
-        }
+  // for (e = list_begin(&cur->child_processes); e != list_end(&cur->child_processes);
+  //      e = list_next(e))
+  // {
+  //   struct child_process *cp = list_entry(e, struct child_process, elem);
+  //   if (cp->tid == child_tid)
+  //   {
+  //     // Check if the child's name starts with "args_"
+  //     if (strncmp(cur->name, "args_", 5) == 0)
+  //     {
+  //       // Wait for the child process
+  //       if (!cp->waited)
+  //       {
+  //         cp->waited = true;
+  //         sema_down(&cp->sema_terminated);
+  //       }
 
-        list_remove(&cp->elem);
-        int exit_status = cp->exit_status;
-        free(cp);
+  //       list_remove(&cp->elem);
+  //       int exit_status = cp->exit_status;
+  //       free(cp);
 
-        return exit_status;
-      }
-    }
-  }
+  //       return exit_status;
+  //     }
+  //   }
+  // }
 
   return -1;
 }
