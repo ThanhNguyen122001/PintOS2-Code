@@ -17,6 +17,8 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/stdio.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -238,15 +240,24 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-//In Sun
- for(filename = strtok_r((char*)file_name, " ", &saveptr); filename != NULL; 
-    filename = strtok_r(NULL, " ", &saveptr)){
-      argv[argc] = filename;
-      argc++;
+  //In Sun
+  filename = palloc_get_page(0);
+  if(filename == NULL){
+    goto done;
+  }
+  strlcpy(filename, file_name, PGSIZE);
+
+  argv[0] = strtok_r(filename, " ", &saveptr);
+  while(1){
+    argv[argc] = strtok_r(NULL, " ", &saveptr);
+    if(argv[argc] == NULL){
+      break;
     }
+    argc++;
+  }
 
   /* Open executable file. */
-  file = filesys_open (argv[0]);
+  file = filesys_open(argv[0]);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);

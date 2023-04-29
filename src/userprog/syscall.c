@@ -49,22 +49,29 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch (*p)
   {
   case SYS_HALT:
+    printf("HALT!");
     halt();
     break;
   case SYS_EXIT:
+    printf("EXIT!");
     status = (int)(*(uint32_t*)(f -> esp + 4));
     exit(status);
     f -> eax = (int)(*(uint32_t*)(f -> esp + 4));
     break;
   case SYS_EXEC:
+    printf("EXEC!");
     file_name =(char*)*(uint32_t*)(f -> esp + 4);
     f -> eax = exec(file_name);
     break;
   case SYS_WAIT:
+    printf("WAIT");
     childPid = (pid_t)*(uint32_t*)(f -> esp + 4);
     f -> eax = wait(childPid);
     break;
-}
+  default:
+    exit(-1);
+    break;
+  }
 }
 
 void halt(void){
