@@ -12,6 +12,8 @@
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "lib/user/syscall.h"
+#include "threads/init.h"
+#include "threads/flags.h"
 
 
 
@@ -27,6 +29,10 @@ int wait (pid_t pid);
  Process related: halt, exit, exec, wait
  File related: create, remove, open, filesize, read, write, seek, tell, close
 */
+
+int status;
+char *file_name;
+pid_t childPid;
 
 void
 syscall_init (void) 
@@ -46,16 +52,16 @@ syscall_handler (struct intr_frame *f UNUSED)
     halt();
     break;
   case SYS_EXIT:
-    int status = (int)(*(uint32_t*)(f -> esp + 4));
+    status = (int)(*(uint32_t*)(f -> esp + 4));
     exit(status);
     f -> eax = (int)(*(uint32_t*)(f -> esp + 4));
     break;
   case SYS_EXEC:
-    char *file_name =(char*)*(uint32_t*)(f -> esp + 4);
+    file_name =(char*)*(uint32_t*)(f -> esp + 4);
     f -> eax = exec(file_name);
     break;
   case SYS_WAIT:
-    pid_t childPid = (pid_t)*(uint32_t*)(f -> esp + 4);
+    childPid = (pid_t)*(uint32_t*)(f -> esp + 4);
     f -> eax = wait(childPid);
     break;
 }
@@ -67,7 +73,6 @@ void halt(void){
 
 void exit(int status){
   struct thread *curr_thread = thread_current();
-  
   printf("Name of process: %s | Exit: %d", curr_thread -> name,status);
   thread_exit();
 }
