@@ -64,6 +64,7 @@ start_process (void *file_name_)
   char *token, *saveptr;
   int argc = 0;
   char *argv[128]; // Assuming max number of arguments is 128
+  int i;
 
   for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
   {
@@ -101,7 +102,7 @@ start_process (void *file_name_)
   // Push pointers to the arguments
   esp -= sizeof(char *);
   memcpy(esp, &null_ptr, sizeof(char *));
-  for (int i = argc - 1; i >= 0; i--)
+  for (i = argc - 1; i >= 0; i--)
   {
     esp -= sizeof(char *);
     memcpy(esp, &argv[i], sizeof(char *));
