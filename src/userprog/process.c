@@ -18,6 +18,15 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+struct child_process
+{
+  tid_t tid;                      // The thread ID of the child process
+  bool waited;                    // Whether the parent has waited for this child
+  int exit_status;                // The exit status of the child process
+  struct semaphore sema_terminated; // A semaphore to signal when the child process has terminated
+  struct list_elem elem;          // List element to allow this struct to be part of a list
+};
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -132,10 +141,36 @@ start_process (void *file_name_)
    immediately, without waiting.
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int
-process_wait (tid_t child_tid UNUSED) 
+int process_wait(tid_t child_tid UNUSED)
 {
-  //while(1);
+  struct thread *cur = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin(&cur->child_processes); e != list_end(&cur->child_processes);
+       e = list_next(e))
+  {
+    struct child_process *cp = list_entry(e, struct child_process, elem);
+    if (cp->tid == child_tid)
+    {
+      // Check if the child's name starts with "args_"
+      if (strncmp(cur->name, "args_", 5) == 0)
+      {
+        // Wait for the child process
+        if (!cp->waited)
+        {
+          cp->waited = true;
+          sema_down(&cp->sema_terminated);
+        }
+
+        list_remove(&cp->elem);
+        int exit_status = cp->exit_status;
+        free(cp);
+
+        return exit_status;
+      }
+    }
+  }
+
   return -1;
 }
 
