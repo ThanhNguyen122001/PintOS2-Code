@@ -17,8 +17,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "lib/stdio.h"
-#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -31,6 +29,7 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *curr_file;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -41,17 +40,14 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Parse file_name for get file_name without arguments */
-  //In Sun
   char *saveptr;
-  file_name = strtok_r((char*)file_name, " ", &saveptr);
+  curr_file = strtok_r(fn_copy, " ", &saveptr);
 
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR){
-    palloc_free_page (fn_copy);
-  }
-   
+  tid = thread_create (curr_file, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR)
+    palloc_free_page (fn_copy); 
   return tid;
 }
 
@@ -60,13 +56,17 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name;
+  char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
 
-  //In Sun
-  char *saveptr;
-  file_name = strtok_r((char*)file_name_, " ", &saveptr);
+char *token, *saveptr;
+int argc = 0;
+char *argv[128];
+
+for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr)){
+  argv[argc++] = token;
+}
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -80,6 +80,48 @@ start_process (void *file_name_)
   if (!success) 
     thread_exit ();
 
+  // Push arguments onto the stack
+  void *esp = if_.esp;
+  uint8_t *null_ptr = NULL;
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    esp -= (strlen(argv[i]) + 1);
+    memcpy(esp, argv[i], strlen(argv[i]) + 1);
+    argv[i] = esp;
+  }
+
+  // Word align
+  while ((uintptr_t)esp % 4 != 0)
+  {
+    esp -= sizeof(char);
+    memcpy(esp, &null_ptr, sizeof(char));
+  }
+
+  // Push pointers to the arguments
+  esp -= sizeof(char *);
+  memcpy(esp, &null_ptr, sizeof(char *));
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    esp -= sizeof(char *);
+    memcpy(esp, &argv[i], sizeof(char *));
+  }
+
+  // Push argv pointer
+  char **argv_ptr = esp;
+  esp -= sizeof(char **);
+  memcpy(esp, &argv_ptr, sizeof(char **));
+
+  // Push argc
+  esp -= sizeof(int);
+  memcpy(esp, &argc, sizeof(int));
+
+  // Push fake return address
+  esp -= sizeof(void *);
+  memcpy(esp, &null_ptr, sizeof(void *));
+
+  // Set the final value of the stack pointer
+  if_.esp = esp;
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -96,7 +138,6 @@ start_process (void *file_name_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
@@ -210,7 +251,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, int argc, char *argv[]);
+static bool setup_stack (void **esp, char * cmdline);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -229,10 +270,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char *saveptr; //Prev. Address
-  char *filename; //Current Address
-  char *argv[128];
-  int argc = 0;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -240,27 +277,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  //In Sun
-  filename = palloc_get_page(0);
-  if(filename == NULL){
-    goto done;
-  }
-  strlcpy(filename, file_name, PGSIZE);
-
-  argv[0] = strtok_r(filename, " ", &saveptr);
-  while(1){
-    argv[argc] = strtok_r(NULL, " ", &saveptr);
-    if(argv[argc] == NULL){
-      break;
-    }
-    argc++;
-  }
-
   /* Open executable file. */
-  file = filesys_open(argv[0]);
+  file = filesys_open (file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", argv[0]);
+      printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
@@ -337,7 +358,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, argc, argv))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -350,7 +371,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -375,7 +396,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   /* The segment must not be empty. */
   if (phdr->p_memsz == 0)
     return false;
-  
+
   /* The virtual memory region must both start and end within the
      user address space range. */
   if (!is_user_vaddr ((void *) phdr->p_vaddr))
@@ -403,15 +424,11 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
-
         - READ_BYTES bytes at UPAGE must be read from FILE
           starting at offset OFS.
-
         - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
-
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
@@ -462,42 +479,76 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, int argc, char *argv[]) 
+setup_stack (void **esp, char * file_name) 
 {
   uint8_t *kpage;
   bool success = false;
-  kpage = palloc_get_page(PAL_USER | PAL_ZERO);
-  int i;
-  
-  if(kpage != NULL){
-    success = install_page(((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-    if(success){
-      *esp = PHYS_BASE - 12;
-      uint32_t *arg_val_ptr[argc];
-      for(i = argc - 1; i >= 0; i--){
-        *esp = *esp - sizeof(char)*(strlen(argv[i]) + 1);
-        memcpy(*esp, argv[i], sizeof(char)*(strlen(argv[i]) + 1));
-        arg_val_ptr[i] = (uint32_t*)*esp;
-      }
 
-      *esp = *esp - 4;
-      (*(int*)(*esp)) = 0;
-      *esp = *esp - 4;
-
-      for(i = argc - 1; i >= 0; i--){
-        (*(uint32_t **)(*esp)) = arg_val_ptr[i];
-        *esp = *esp - 4;
-      }
-
-      (*(uintptr_t **)(*esp)) = *esp + 4;
-      *esp = *esp - 4;
-      *(int*)(*esp) = argc;
-      *esp = *esp - 4;
-      (*(int*)(*esp)) = 0;
-    }else{
-      palloc_free_page(kpage);
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL) 
+    {
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+        *esp = PHYS_BASE;
+      else
+        palloc_free_page (kpage);
     }
+
+  char *token;
+  char *save_ptr;
+  int argc = 0;
+  int i;
+
+  char * copy = malloc(strlen(file_name)+1);
+  strlcpy (copy, file_name, strlen(file_name)+1);
+
+
+  for (token = strtok_r (copy, " ", &save_ptr); token != NULL;
+    token = strtok_r (NULL, " ", &save_ptr))
+    argc++;
+
+
+  int *argv = calloc(argc,sizeof(int));
+
+  for (token = strtok_r (file_name, " ", &save_ptr),i=0; token != NULL;
+    token = strtok_r (NULL, " ", &save_ptr),i++)
+    {
+      *esp -= strlen(token) + 1;
+      memcpy(*esp,token,strlen(token) + 1);
+
+      argv[i]=*esp;
+    }
+
+  while((int)*esp%4!=0)
+  {
+    *esp-=sizeof(char);
+    char x = 0;
+    memcpy(*esp,&x,sizeof(char));
   }
+
+  int zero = 0;
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&zero,sizeof(int));
+
+  for(i=argc-1;i>=0;i--)
+  {
+    *esp-=sizeof(int);
+    memcpy(*esp,&argv[i],sizeof(int));
+  }
+
+  int pt = *esp;
+  *esp-=sizeof(int);
+  memcpy(*esp,&pt,sizeof(int));
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&argc,sizeof(int));
+
+  *esp-=sizeof(int);
+  memcpy(*esp,&zero,sizeof(int));
+
+  hex_dump(*esp, *esp, PHYS_BASE - (*esp), true);
+
   return success;
 }
 
