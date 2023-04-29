@@ -39,8 +39,9 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Parse file_name for get file_name without arguments */
+  //In Sun
   char *saveptr;
-  file_name = strtok_r(file_name, " ", &saveptr);
+  file_name = strtok_r((char*)file_name, " ", &saveptr);
 
 
   /* Create a new thread to execute FILE_NAME. */
@@ -55,9 +56,13 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  char *file_name;
   struct intr_frame if_;
   bool success;
+
+  //In Sun
+  char *saveptr;
+  file_name = strtok_r((char*)file_name, " ", &saveptr);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -137,7 +142,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -220,12 +225,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char *saveptr;
+  char *filename;
+  char *argv[128];
+  int argc = 0;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+
+//In Sun
+ for(filename = strtok_r((char*)file_name, " ", &saveptr); filename != NULL; 
+    filename = strtok_r(NULL, " ", &saveptr)){
+      argv[argc] = filename;
+      argc++;
+    }
 
   /* Open executable file. */
   file = filesys_open (file_name);
