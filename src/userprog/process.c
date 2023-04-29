@@ -227,8 +227,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char *saveptr;
-  char *filename;
+  char *saveptr; //Prev. Address
+  char *filename; //Current Address
   char *argv[128];
   int argc = 0;
 
@@ -477,7 +477,7 @@ setup_stack (void **esp, int argc, char *argv[])
         (*(uint32_t **)(*esp)) = arg_val_ptr[i];
         *esp = *esp - 4;
       }
-      
+
       (*(uintptr_t **)(*esp)) = *esp + 4;
       *esp = *esp - 4;
       *(int*)(*esp) = argc;

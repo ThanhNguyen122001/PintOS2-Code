@@ -92,7 +92,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   case SYS_WRITE:
     printf("WRITE!");
-    f -> R.rax = write(f -> R.rdi, f -> R.rsi, f -> R.rdx);
+    // f -> R.rax = write(f -> R.rdi, f -> R.rsi, f -> R.rdx);
     break;
   case SYS_SEEK:
     printf("SEEK!");
@@ -176,16 +176,16 @@ open(const char *file_name){
   return -1;
 }
 
-off_t 
-fileSize(int fd){
-  struct process_file *curr_file = get_file(fd);
-  off_t size_file = 0; 
+// off_t 
+// fileSize(int fd){
+//   struct process_file *curr_file = get_file(fd);
+//   off_t size_file = 0; 
 
-  if(curr_file != NULL){
-    size_file = file_length(curr_file -> file);
-  }
-  return size_file;
-}
+//   if(curr_file != NULL){
+//     size_file = file_length(curr_file -> file);
+//   }
+//   return size_file;
+// }
 
 int 
 read(int fd, const void *buffer, unsigned size){
@@ -199,3 +199,8 @@ read(int fd, const void *buffer, unsigned size){
   }
 
   }
+
+// void check_address(const uint64_t *pointer){
+//   struct thread *curr_thread = thread_current();
+//   if(pointer == NULL || )
+// }
