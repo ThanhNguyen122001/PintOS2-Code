@@ -1,10 +1,19 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "threads/synch.h"
+#include "devices/input.h"
 #include "devices/shutdown.h"
-#include "userprog/process.h"
+#include "process.h"
+#include "filesys/filesys.h"
+#include "threads/malloc.h"
+#include "lib/user/syscall.h"
+
+
 
 static void syscall_handler (struct intr_frame *);
 void halt(void);
@@ -58,7 +67,8 @@ void halt(void){
 
 void exit(int status){
   struct thread *curr_thread = thread_current();
-  printf("Name of process: %d", status);
+  
+  printf("Name of process: %s | Exit: %d", curr_thread -> name,status);
   thread_exit();
 }
 
