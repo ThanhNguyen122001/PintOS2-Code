@@ -12,6 +12,7 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "userprog/process.h"
 
 /* Process related: halt, exit, exec, wait
    File related: create, remove, open, filesize, read, write, seek, tell, close*/

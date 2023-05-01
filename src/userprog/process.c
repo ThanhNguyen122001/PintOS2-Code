@@ -141,7 +141,7 @@ int process_wait(tid_t child_tid UNUSED)
   struct list_elem *c_elem;
   int exit_stat;
 
-  c_thread = get_child_process(child_tid);
+  c_thread = get_c_process(child_tid);
   if(c_thread == NULL){
     return -1;
   }
