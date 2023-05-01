@@ -80,7 +80,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     addressChecker(f -> esp + 4);
     addressChecker(f -> esp + 8);
     addressChecker(f -> esp + 12);
-    f -> eax = read((int)*(uint32_t *)(f -> esp + 4), 
+    f -> eax = sys_read((int)*(uint32_t *)(f -> esp + 4), 
           (void*)*(uint32_t*)(f -> esp + 8), 
               (unsigned)*(uint32_t*)(f -> esp + 12));
     break;
@@ -88,7 +88,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     addressChecker(f -> esp + 4);
     addressChecker(f -> esp + 8);
     addressChecker(f -> esp + 12);
-    f -> eax = write((int)*(uint32_t *)(f -> esp + 4), 
+    f -> eax = sys_write((int)*(uint32_t *)(f -> esp + 4), 
           (void*)*(uint32_t*)(f -> esp + 8), 
               (unsigned)*(uint32_t*)(f -> esp + 12));
     break;
@@ -144,7 +144,7 @@ int read(int fd, void *buffer, unsigned int size){
   }
 }
 
-int write(int fd, const void* buffer, unsigned int size){
+int sys_write(int fd, const void* buffer, unsigned int size){
   if(fd == 1){
     putbuf(buffer, size);
     return size;
@@ -152,7 +152,7 @@ int write(int fd, const void* buffer, unsigned int size){
   return -1;
 }
 
-int read(int fd, void *buffer, unsigned int size){
+int sys_read(int fd, void *buffer, unsigned int size){
   int answer;
   uint8_t temp;
 

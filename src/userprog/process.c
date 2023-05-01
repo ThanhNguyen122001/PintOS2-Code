@@ -148,7 +148,7 @@ int process_wait(tid_t child_tid UNUSED)
 
   sema_down(&(c_thread -> exit_sema));
   exit_stat = c_thread -> exit_status;
-  list_remove(&(c_thread -> c_thread_element));
+  list_remove(&(c_thread -> c_thread_elem));
   return exit_stat;
 }
 

@@ -407,7 +407,7 @@ struct thread* get_c_process(pid_t pid){
 
   for(c_elem = list_begin(&(thread_current() -> child_list));
         c_elem != list_end(&(thread_current() -> child_list)); 
-          c_elem = list_next(elem)){
+          c_elem = list_next(c_elem)){
               c_thread = list_entry(c_elem, struct thread, c_thread_elem);
               if(pid == c_thread -> tid){
                 return c_thread;
