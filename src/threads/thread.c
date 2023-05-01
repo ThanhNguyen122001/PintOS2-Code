@@ -400,6 +400,21 @@ recalculate_all_priority (void) {
   }
 }
 
+struct thread* get_c_process(pid_t pid){
+  struct thread *c_thread;
+  struct list_elem *c_elem;
+
+  for(c_elem = list_begin(&(thread_current() -> child_list));
+        c_elem != list_end(&(thread_current() -> child_list)); 
+          c_elem = list_next(elem)){
+              c_thread = list_entry(c_elem, struct thread, c_thread_element);
+              if(pid == c_thread -> tid){
+                return c_thread;
+              }
+          }
+  return NULL;
+}
+
 /* Prints thread statistics. */
 void
 thread_print_stats (void) 
@@ -573,6 +588,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  sema_up(&(thread_current() -> exit_sema));
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -802,6 +818,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->nice = 0;
   t->recent_cpu = 0;
 
+  #ifdef USERPROG
+  list_init(&(t -> child_list));
+  list_push_back(&(running_thread() -> child_list), &(t -> c_thread_element));
+  t -> p_thread = running_thread();
+  sema_init(&( t-> exit_sema),0);
+  sema_init(&(t -> load_sema),0);
+  #endif
+
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }
@@ -875,7 +899,7 @@ thread_schedule_tail (struct thread *prev)
   if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      //palloc_free_page (prev);
     }
 }
 

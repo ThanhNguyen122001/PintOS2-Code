@@ -10,6 +10,9 @@
 #include "userprog/process.h"
 #include "devices/input.h"
 
+/* Process related: halt, exit, exec, wait
+   File related: create, remove, open, filesize, read, write, seek, tell, close*/
+
 static void syscall_handler (struct intr_frame *);
 
 void
@@ -37,7 +40,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch(*(int32_t *)(f -> esp))
   {
   case SYS_HALT:
-    halt();
+    shutdown_power_off();
     break;
   case SYS_EXIT:
     addressChecker(f -> esp + 4);
@@ -60,8 +63,20 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_FILESIZE:
     break;
   case SYS_READ:
+    addressChecker(f -> esp + 4);
+    addressChecker(f -> esp + 8);
+    addressChecker(f -> esp + 12);
+    f -> eax = read((int)*(uint32_t *)(f -> esp + 4), 
+          (void*)*(uint32_t*)(f -> esp + 8), 
+              (unsigned)*(uint32_t*)(f -> esp + 12));
     break;
   case SYS_WRITE:
+    addressChecker(f -> esp + 4);
+    addressChecker(f -> esp + 8);
+    addressChecker(f -> esp + 12);
+    f -> eax = write((int)*(uint32_t *)(f -> esp + 4), 
+          (void*)*(uint32_t*)(f -> esp + 8), 
+              (unsigned)*(uint32_t*)(f -> esp + 12));
     break;
   case SYS_SEEK:
     break;
@@ -69,15 +84,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   case SYS_CLOSE:
     break;
-  }  
+  default:
+    exit(-1);
+  } 
 
   printf ("system call!\n");
   thread_exit ();
 }
 
-void halt(void){
-  shutdown_power_off();
-}
 
 void exit(int status){
   struct thread *curr_thread = thread_current();

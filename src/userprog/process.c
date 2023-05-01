@@ -19,15 +19,6 @@
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 
-struct child_process
-{
-  tid_t tid;                      // The thread ID of the child process
-  bool waited;                    // Whether the parent has waited for this child
-  int exit_status;                // The exit status of the child process
-  struct semaphore sema_terminated; // A semaphore to signal when the child process has terminated
-  struct list_elem elem;          // List element to allow this struct to be part of a list
-};
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -41,6 +32,8 @@ process_execute (const char *file_name)
   char *fn_copy;
   char *curr_file;
   tid_t tid;
+  char file_copy[128];
+  char *saveptr;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -50,12 +43,12 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Parse file_name for get file_name without arguments */
-  char *saveptr;
-  curr_file = strtok_r(fn_copy, " ", &saveptr);
+  strlcpy(file_copy, file_name, strlen(file_name) + 1);
+  curr_file = strtok_r(file_copy, " ", &saveptr);
 
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (curr_file, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -144,35 +137,19 @@ start_process (void *file_name_)
    does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-  // struct thread *cur = thread_current();
-  // struct list_elem *e;
+  struct thread *c_thread;
+  struct list_elem *c_elem;
+  int exit_stat;
 
-  // for (e = list_begin(&cur->child_processes); e != list_end(&cur->child_processes);
-  //      e = list_next(e))
-  // {
-  //   struct child_process *cp = list_entry(e, struct child_process, elem);
-  //   if (cp->tid == child_tid)
-  //   {
-  //     // Check if the child's name starts with "args_"
-  //     if (strncmp(cur->name, "args_", 5) == 0)
-  //     {
-  //       // Wait for the child process
-  //       if (!cp->waited)
-  //       {
-  //         cp->waited = true;
-  //         sema_down(&cp->sema_terminated);
-  //       }
+  c_thread = get_child_process(child_tid);
+  if(c_thread == NULL){
+    return -1;
+  }
 
-  //       list_remove(&cp->elem);
-  //       int exit_status = cp->exit_status;
-  //       free(cp);
-
-  //       return exit_status;
-  //     }
-  //   }
-  // }
-
-  return -1;
+  sema_down(&(c_thread -> exit_sema));
+  exit_stat = c_thread -> exit_status;
+  list_remove(&(c_thread -> c_thread_element));
+  return exit_stat;
 }
 
 /* Free the current process's resources. */
