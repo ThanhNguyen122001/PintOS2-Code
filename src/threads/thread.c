@@ -14,6 +14,7 @@
 #include "threads/fixed_point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -407,7 +408,7 @@ struct thread* get_c_process(pid_t pid){
   for(c_elem = list_begin(&(thread_current() -> child_list));
         c_elem != list_end(&(thread_current() -> child_list)); 
           c_elem = list_next(elem)){
-              c_thread = list_entry(c_elem, struct thread, c_thread_element);
+              c_thread = list_entry(c_elem, struct thread, c_thread_elem);
               if(pid == c_thread -> tid){
                 return c_thread;
               }
@@ -821,7 +822,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   #ifdef USERPROG
   list_init(&(t -> child_list));
-  list_push_back(&(running_thread() -> child_list), &(t -> c_thread_element));
+  list_push_back(&(running_thread() -> child_list), &(t -> c_thread_elem));
   t -> p_thread = running_thread();
   sema_init(&( t-> exit_sema),0);
   sema_init(&(t -> load_sema),0);
