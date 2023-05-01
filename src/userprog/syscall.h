@@ -1,11 +1,13 @@
 #ifndef USERPROG_SYSCALL_H
 #define USERPROG_SYSCALL_H
 #include <stdbool.h>
+#include <threads/synch.h>
+
+struct lock *file_lock;
 
 typedef int pid_t;
 void syscall_init (void);
 void addressChecker(void* address);
-void halt(void);
 void exit(int status);
 pid_t exec(const char *cmd_line);
 int wait(pid_t pid);
@@ -18,5 +20,9 @@ int write(int fd, const void *buffer, unsigned int size);
 void seek(int fd, unsigned int position);
 unsigned int tell(int fd);
 void close(int fd);
+
+struct file *get_file(int fd);
+int add_file(struct file* file);
+void close_file(int fd);
 
 #endif /* userprog/syscall.h */

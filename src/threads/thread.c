@@ -802,6 +802,7 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
+  int i;
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -824,6 +825,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t -> p_thread = running_thread();
   sema_init(&( t-> exit_sema),0);
   sema_init(&(t -> load_sema),0);
+  for (i = 0; i < FD_SIZE; i++)
+  {
+    t -> file_desc_list[i] == NULL;
+  }
   #endif
 
   t->magic = THREAD_MAGIC;
