@@ -505,6 +505,10 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+  if(!threading_started){
+    return;
+  }
+
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
@@ -601,8 +605,10 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
-  if(!threading_started)
+  if(!threading_started){
     return;
+  }
+  
   struct thread *cur = thread_current ();
   enum intr_level old_level;
   
