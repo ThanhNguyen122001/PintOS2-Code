@@ -168,7 +168,7 @@ int sys_read(int fd, void *buffer, unsigned int size){
       *(uint8_t*)(buffer + answer) = temp;
     }
   }else{
-    struct file *curr_file = process_get_file(fd);
+    struct file *curr_file = get_file(fd);
     if(curr_file == NULL){
       lock_release(&file_lock);
       exit(-1);
@@ -214,7 +214,7 @@ int write(int fd, const void* buffer, unsigned int size){
     lock_release(&file_lock);
     return size;
   }else{
-    curr_file = process_get_file(fd);
+    curr_file = get_file(fd);
     if(curr_file == NULL){
       lock_release(&file_lock);
       exit(-1);
@@ -244,7 +244,7 @@ void close(int fd){
 }
 
 int filesize(int fd){
-  struct file *curr_file = process_get_file(fd);
+  struct file *curr_file = get_file(fd);
   if(curr_file == NULL){
     exit(-1);
   }
@@ -252,7 +252,7 @@ int filesize(int fd){
 }
 
 void seek(int fd, unsigned int position){
-  struct file *curr_file = process_get_file(fd);
+  struct file *curr_file = get_file(fd);
   
   if(curr_file == NULL){
     exit(-1);
@@ -261,7 +261,7 @@ void seek(int fd, unsigned int position){
 }
 
 unsigned int tell(int fd){
-  struct file *curr_file = process_get_file(fd);
+  struct file *curr_file = get_file(fd);
   if(curr_file == NULL){
     exit(-1);
   }
@@ -270,6 +270,7 @@ unsigned int tell(int fd){
 
 struct file *get_file(int fd){
   struct thread *curr_thread = thread_current();
+
   if(fd < 3 || fd >= FD_SIZE){
     return NULL;
   }
