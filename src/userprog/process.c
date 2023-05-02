@@ -30,13 +30,12 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
-  char *curr_file;
   tid_t tid;
-  char file_copy[128];
-  char *saveptr;
-  struct list_elem* element;
-  struct thread *curr_thread;
-  struct thread *temp_thread = thread_current();
+  char temp_fn_copy[200];
+  char *passed_fn;
+  struct list_elem *element;
+  struct thread *curr_thread = thread_current();
+  struct thread *temp_thread;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -46,26 +45,28 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Parse file_name for get file_name without arguments */
-  strlcpy(file_copy, file_name, strlen(file_name) + 1);
-  curr_file = strtok_r(file_copy, " ", &saveptr);
+  char *saveptr;
+  strlcpy(temp_fn_copy, file_name, strlen(file_name) + 1);
+  passed_fn = strtok_r(temp_fn_copy, " ", &saveptr);
 
-  if(filesys_open(curr_file) == NULL){
+  if(filesys_open(passed_fn) == NULL){
     return -1;
   }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR){
-    palloc_free_page (fn_copy); 
-  }
-    
-  for(element = list_begin(&temp_thread -> child_list); 
-    element != list_end(&temp_thread -> child_list); element = list_next(element)){
-      curr_thread = list_entry(element, struct thread, c_thread_elem);
-      if(curr_thread -> l_flag == false){
-        return process_wait(tid);
+    palloc_free_page (fn_copy);
+  } 
+
+  for(element = list_begin(&curr_thread -> child_list); 
+    element != list_end(&curr_thread -> child_list);
+      element = list_next(element)){
+        temp_thread = list_entry(element, struct thread, c_thread_elem);
+        if(temp_thread -> l_flag == false){
+          return process_wait(tid);
+        }
       }
-    }
   return tid;
 }
 
@@ -77,17 +78,6 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
-  // Tokenize the arguments and push them onto the stack
-  char *token, *saveptr;
-  int argc = 0;
-  char *argv[128]; // Assuming max number of arguments is 128
-  int i;
-
-  for (token = strtok_r(file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr))
-  {
-    argv[argc++] = token;
-  }
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -103,52 +93,43 @@ start_process (void *file_name_)
   if (!success){
     thread_current() -> l_flag = false;
     exit(-1);
-  } 
-
-  thread_current() -> l_flag = true;
-  // Push arguments onto the stack
-  void *esp = if_.esp;
-  uint8_t *null_ptr = NULL;
-  for (i = argc - 1; i >= 0; i--)
-  {
-    esp -= (strlen(argv[i]) + 1);
-    memcpy(esp, argv[i], strlen(argv[i]) + 1);
-    argv[i] = esp;
   }
 
-  // Word align
-  while ((uintptr_t)esp % 4 != 0)
-  {  esp -= sizeof(uint8_t);
-    memcpy(esp, &null_ptr, sizeof(uint8_t));
+  thread_current() -> l-flag = true;
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  NOT_REACHED ();
+}
+
+/* Waits for thread TID to die and returns its exit status.  If
+   it was terminated by the kernel (i.e. killed due to an
+   exception), returns -1.  If TID is invalid or if it was not a
+   child of the calling process, or if process_wait() has already
+   been successfully called for the given TID, returns -1
+   immediately, without waiting.
+   This function will be implemented in problem 2-2.  For now, it
+   does nothing. */
+int
+process_wait (tid_t child_tid UNUSED) 
+{
+  struct thread *c_thread;
+  struct list_elem *element;
+  int eStatus;
+
+  c_thread = get_c_process(child_tid);
+  if(c_thread == NULL){
+    return -1;
   }
-
-  // Push pointers to the arguments
-  esp -= sizeof(char *);
-  memcpy(esp, &null_ptr, sizeof(char *));
-  for (i = argc - 1; i >= 0; i--)
-  {
-    esp -= sizeof(char *);
-    memcpy(esp, &argv[i], sizeof(char *));
-  }
-
-  // Push argv pointer
-  char **argv_ptr = esp;
-  esp -= sizeof(char **);
-  memcpy(esp, &argv_ptr, sizeof(char **));
-
-  // Push argc
-  esp -= sizeof(int);
-  memcpy(esp, &argc, sizeof(int));
-
-  // Push fake return address
-  esp -= sizeof(void *);
-  memcpy(esp, &null_ptr, sizeof(void *));
-
-  // Set the final value of the stack pointer
-  if_.esp = esp;  
-
-  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-  NOT_REACHED();
+  
+  sema_down(&(c_thread -> exit_sema));
+  eStatus = c_thread -> exit_status;
+  list_remove(&(c_thread -> c_thread_elem));
+  return eStatus;
 }
 
 void stack_create(const char *file_name, void **esp){
@@ -199,7 +180,7 @@ void stack_create(const char *file_name, void **esp){
     *esp = *esp - 4;
     **((uint32_t**)esp) = argv[index];
   }
-  
+    
   *esp = *esp - 4;
   **((uint32_t**)esp) = *esp + 4;
   *esp = *esp - 4;
@@ -208,32 +189,6 @@ void stack_create(const char *file_name, void **esp){
   **((uint32_t**)esp) = 0;
 
   free(argv);
-}
-
-/* Waits for thread TID to die and returns its exit status.  If
-   it was terminated by the kernel (i.e. killed due to an
-   exception), returns -1.  If TID is invalid or if it was not a
-   child of the calling process, or if process_wait() has already
-   been successfully called for the given TID, returns -1
-   immediately, without waiting.
-   This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
-int process_wait(tid_t child_tid UNUSED)
-{
-  struct thread *c_thread;
-  struct list_elem *c_elem;
-  int exit_stat;
-
-  c_thread = get_c_process(child_tid);
-  if(c_thread == NULL){
-    return -1;
-  }
-
-  sema_down(&(c_thread -> exit_sema));
-  exit_stat = c_thread -> exit_status;
-  list_remove(&(c_thread -> c_thread_elem));
-  sema_down(&(c_thread -> remove_sema));
-  return exit_stat;
 }
 
 /* Free the current process's resources. */
@@ -246,6 +201,11 @@ process_exit (void)
   struct thread *c_thread;
   struct thread *curr_thread = thread_current();
   struct list_elem *element;
+
+  file_close(cur -> file_exe);
+  for(i = 3; i < FD_SIZE; i++){
+    close_file(i);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -265,16 +225,16 @@ process_exit (void)
     }
 
   for(element = list_begin(&(curr_thread -> child_list)); 
-    element != list_end(&(curr_thread -> child_list)); 
+    element != list_end(&(curr_thread -> child_list));
       element = list_next(element)){
         c_thread = list_entry(element, struct thread, c_thread_elem);
         process_wait(c_thread -> tid);
       }
-
+  
   file_close(cur -> file_exe);
-
+  
   for(i = 3; i < FD_SIZE; i++){
-    file_close(i);
+    close_file(i);
   }
 }
 
@@ -376,9 +336,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-  char input[200];
-  char *inputPtr;
-  char* inputName;
+  char *fn_copy;
+  char *firstArgs;
+  char *savePtr;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -386,19 +346,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  strlcpy(input, file_name, sizeof(file_name));
-  inputName = strtok_r(input, " ", &inputPtr);
+  fn_copy = malloc(sizeof(char)*(strlen(file_name) + 1));
+  strlcpy(fn_copy, file_name, (strlen(file_name)));
+  fn_copy[strlen(file_name)] = '\0';
+  firstArgs = strtok_r(fn_copy, " ", &savePtr);
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (firstArgs);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", firstArgs);
+      free(fn_copy);
       goto done; 
     }
 
   t -> file_exe = file;
   file_deny_write(file);
+  free(fn_copy);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -485,7 +449,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  //file_close (file);
+  file_close (file);
   return success;
 }
 
@@ -625,7 +589,7 @@ setup_stack (void **esp, char * file_name)
     argc++;
 
 
-  char **argv = calloc(argc,sizeof(char *));
+  int *argv = calloc(argc,sizeof(int));
 
   for (token = strtok_r (file_name, " ", &save_ptr),i=0; token != NULL;
     token = strtok_r (NULL, " ", &save_ptr),i++)
@@ -633,7 +597,7 @@ setup_stack (void **esp, char * file_name)
       *esp -= strlen(token) + 1;
       memcpy(*esp,token,strlen(token) + 1);
 
-      argv[i]= *esp;
+      argv[i]=*esp;
     }
 
   while((int)*esp%4!=0)
@@ -650,12 +614,12 @@ setup_stack (void **esp, char * file_name)
 
   for(i=argc-1;i>=0;i--)
   {
-    *esp-=sizeof(char *);
-    memcpy(*esp,&argv[i],sizeof(char *));
+    *esp-=sizeof(int);
+    memcpy(*esp,&argv[i],sizeof(int));
   }
 
-  char **pt = *esp;
-  *esp-=sizeof(char **);
+  int pt = *esp;
+  *esp-=sizeof(int);
   memcpy(*esp,&pt,sizeof(int));
 
   *esp-=sizeof(int);
@@ -664,8 +628,7 @@ setup_stack (void **esp, char * file_name)
   *esp-=sizeof(int);
   memcpy(*esp,&zero,sizeof(int));
 
-  free(copy);
-  free(argv);
+  hex_dump(*esp, *esp, PHYS_BASE - (*esp), true);
 
   return success;
 }

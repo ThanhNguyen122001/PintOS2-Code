@@ -4,6 +4,7 @@
         "syscall-nr.h": "c",
         "stdio.h": "c",
         "interrupt.h": "c",
-        "process.h": "c"
+        "process.h": "c",
+        "__threading_support": "c"
     }
 }

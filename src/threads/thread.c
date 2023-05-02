@@ -505,15 +505,15 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  if(!threading_started){
+  if(threading_started == false){
     return;
+  }else{
+    ASSERT (!intr_context ());
+    ASSERT (intr_get_level () == INTR_OFF);
+
+    thread_current ()->status = THREAD_BLOCKED;
+    schedule ();
   }
-
-  ASSERT (!intr_context ());
-  ASSERT (intr_get_level () == INTR_OFF);
-
-  thread_current ()->status = THREAD_BLOCKED;
-  schedule ();
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -605,22 +605,22 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
-  if(!threading_started){
+  if(threading_started == false){
     return;
-  }
+  }else{
+    struct thread *cur = thread_current ();
+    enum intr_level old_level;
   
-  struct thread *cur = thread_current ();
-  enum intr_level old_level;
-  
-  ASSERT (!intr_context ());
+    ASSERT (!intr_context ());
 
-  old_level = intr_disable ();
-  if (cur != idle_thread) 
-    // list_push_back (&ready_list, &cur->elem);
-    list_insert_ordered(&ready_list, &cur -> elem, thread_compare_priority, 0);
-  cur->status = THREAD_READY;
-  schedule ();
-  intr_set_level (old_level);
+    old_level = intr_disable ();
+    if (cur != idle_thread) 
+      // list_push_back (&ready_list, &cur->elem);
+      list_insert_ordered(&ready_list, &cur -> elem, thread_compare_priority, 0);
+    cur->status = THREAD_READY;
+    schedule ();
+    intr_set_level (old_level);
+  }
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
