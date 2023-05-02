@@ -99,7 +99,6 @@ struct thread
    struct lock *wait_on_lock;           /* lock that thread is waiting for get */
    struct list donations;               /* list of threads that donate their priority */
    struct list_elem donation_elem;      /* element for manage the list donations */
-   struct list child_processes;
 
    int nice;                            /* value for nice */
    int recent_cpu;                      /* value for recent_cpu */
@@ -184,5 +183,6 @@ void thread_set_nice (int nice);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+struct thread* get_c_process(pid_t pid);
 
 #endif /* threads/thread.h */

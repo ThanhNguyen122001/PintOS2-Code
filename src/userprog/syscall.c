@@ -124,13 +124,21 @@ void exit(int status){
 
 pid_t exec(const char *cmd_line){
   tid_t tid;
+  struct thread *curr_thread;
 
   tid = process_execute(cmd_line);
+  curr_thread = get_c_process(tid);
 
   if(tid != -1){
     sema_down(&(get_c_process(tid) -> load_sema));
+    if(curr_thread -> l_flag == false){
+      return -1;
+    }else{
+      return tid;
+    }
+  }else{
+    return -1;
   }
-  return tid;
 }
 
 int wait(pid_t pid){

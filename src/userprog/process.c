@@ -243,10 +243,9 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
   int i;
-
-  for(i = 3; i < FD_SIZE; i++){
-    file_close(i);
-  }
+  struct thread *c_thread;
+  struct thread *curr_thread = thread_current();
+  struct list_elem *element;
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -264,6 +263,19 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+  for(element = list_begin(&(curr_thread -> child_list)); 
+    element != list_end(&(curr_thread -> child_list)); 
+      element = list_next(element)){
+        c_thread = list_entry(element, struct thread, c_thread_elem);
+        process_wait(c_thread -> tid);
+      }
+
+  file_close(cur -> file_exe);
+
+  for(i = 3; i < FD_SIZE; i++){
+    file_close(i);
+  }
 }
 
 /* Sets up the CPU for running user code in the current
@@ -374,7 +386,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
-  strlcpy(input, file_name, 129);
+  strlcpy(input, file_name, sizeof(file_name));
   inputName = strtok_r(input, " ", &inputPtr);
 
   /* Open executable file. */
