@@ -57,7 +57,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   case SYS_WAIT:
     addressChecker(f -> esp + 4);
-    f -> eax = wait(*(uint32_t*)(f -> esp + 4));
+    f -> eax = sys_wait(*(uint32_t*)(f -> esp + 4));
     break;
   case SYS_CREATE:
     addressChecker(f -> esp + 4);
@@ -141,7 +141,7 @@ pid_t exec(const char *cmd_line){
   }
 }
 
-int wait(pid_t pid){
+int sys_wait(pid_t pid){
   process_wait(pid);
 }
 

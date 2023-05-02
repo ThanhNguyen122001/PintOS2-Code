@@ -483,7 +483,7 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
-  list_init(&t -> child_processes);
+  list_init(&t -> child_list);
 
   /* Add to run queue. */
   thread_unblock (t);
