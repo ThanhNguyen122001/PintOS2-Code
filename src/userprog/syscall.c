@@ -123,7 +123,14 @@ void exit(int status){
 }
 
 pid_t exec(const char *cmd_line){
-  process_execute(cmd_line);
+  tid_t tid;
+
+  tid = process_execute(cmd_line);
+
+  if(tid != -1){
+    sema_down(&(get_c_process(tid) -> load_sema));
+  }
+  return tid;
 }
 
 int wait(pid_t pid){
@@ -146,11 +153,28 @@ int read(int fd, void *buffer, unsigned int size){
 }
 
 int sys_write(int fd, const void* buffer, unsigned int size){
+  int answer;
+  struct file *curr_file;
+
+  if(fd <= 0 || fd >= FD_SIZE){
+    exit(-1);
+  }
+
+  addressChecker(buffer);
+  lock_acquire(&file_lock);
+
   if(fd == 1){
     putbuf(buffer, size);
     return size;
+  }else{
+    curr_file = get_file(fd);
+    if(curr_file == NULL){
+      lock_release(&file_lock);
+      exit(-1);
+    }
+    answer = file_write(curr_file, buffer, size);
+    return answer;
   }
-  return -1;
 }
 
 int sys_read(int fd, void *buffer, unsigned int size){
@@ -161,6 +185,7 @@ int sys_read(int fd, void *buffer, unsigned int size){
     exit(-1);
   }
   
+  addressChecker(buffer);
   lock_acquire(&file_lock);
 
   if(fd == 0){

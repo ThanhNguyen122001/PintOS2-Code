@@ -590,6 +590,7 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   sema_up(&(thread_current() -> exit_sema));
+  sema_down(&(thread_current() -> remove_sema));
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();

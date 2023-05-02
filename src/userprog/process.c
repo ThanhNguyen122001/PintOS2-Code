@@ -34,6 +34,9 @@ process_execute (const char *file_name)
   tid_t tid;
   char file_copy[128];
   char *saveptr;
+  struct list_elem* element;
+  struct thread *curr_thread;
+  struct thread *temp_thread = thread_current();
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -46,11 +49,23 @@ process_execute (const char *file_name)
   strlcpy(file_copy, file_name, strlen(file_name) + 1);
   curr_file = strtok_r(file_copy, " ", &saveptr);
 
+  if(filesys_open(curr_file) == NULL){
+    return -1;
+  }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  if (tid == TID_ERROR){
     palloc_free_page (fn_copy); 
+  }
+    
+  for(element = list_begin(&temp_thread -> child_list); 
+    element != list_end(&temp_thread -> child_list); element = list_next(element)){
+      curr_thread = list_entry(element, struct thread, c_thread_elem);
+      if(curr_thread -> l_flag == false){
+        return process_wait(tid);
+      }
+    }
   return tid;
 }
 
@@ -79,13 +94,18 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (argv[0], &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp);
+
+  sema_up(&(thread_current() -> load_sema));
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if (!success){
+    thread_current() -> l_flag = false;
+    exit(-1);
+  } 
 
+  thread_current() -> l_flag = true;
   // Push arguments onto the stack
   void *esp = if_.esp;
   uint8_t *null_ptr = NULL;
@@ -126,7 +146,70 @@ start_process (void *file_name_)
 
   // Set the final value of the stack pointer
   if_.esp = esp;  
+
+  asm volatile("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  NOT_REACHED();
 }
+
+void stack_create(const char *file_name, void **esp){
+  int argc = 0;
+  int index = 0;
+  char** argv;
+  int totalLength = 0;
+  int currentLength;
+  char fn_copy;
+  char *fn_token;
+  char *saveptr;
+
+  strlcpy(fn_copy, file_name, strlen(file_name) +  1);
+
+  fn_token = strtok_r(fn_copy, " ", &saveptr);
+
+  while(fn_token != NULL){
+    fn_token = strtok_r(fn_copy, " ", &saveptr);
+    argc = argc + 1;
+  }
+
+  argv = malloc(sizeof(char)*(argc + 1));
+  strlcpy(fn_copy, file_name, strlen(file_name) + 1);
+  
+  for(fn_token = strtok_r(fn_copy, " ", &saveptr); 
+    fn_token != NULL; 
+      fn_token = strtok_r(NULL, " ", &saveptr)){
+        totalLength = totalLength + (strlen(fn_token) + 1);
+        argv[index] = fn_token;
+        index = index + 1;
+  }
+
+  for(index = argc - 1; index >= 0; index--){
+    currentLength = strlen(argv[index]);
+    *esp = *esp - (currentLength + 1);
+    strlcpy(*esp, argv[index], currentLength + 1);
+    argv[index] = *esp;
+  }
+
+  if(totalLength % 4){
+    *esp = (*esp - 4) - (totalLength % 4);
+  }
+
+  *esp = *esp - 4;
+  **((uint32_t**)esp) = 0;
+
+  for(index = argc - 1; index >= 0; index--){
+    *esp = *esp - 4;
+    **((uint32_t**)esp) = argv[index];
+  }
+  
+  *esp = *esp - 4;
+  **((uint32_t**)esp) = *esp + 4;
+  *esp = *esp - 4;
+  **((uint32_t**)esp) = argc;
+  *esp = *esp - 4;
+  **((uint32_t**)esp) = 0;
+
+  free(argv);
+}
+
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -149,6 +232,7 @@ int process_wait(tid_t child_tid UNUSED)
   sema_down(&(c_thread -> exit_sema));
   exit_stat = c_thread -> exit_status;
   list_remove(&(c_thread -> c_thread_elem));
+  sema_down(&(c_thread -> remove_sema));
   return exit_stat;
 }
 
@@ -158,6 +242,11 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+  int i;
+
+  for(i = 3; i < FD_SIZE; i++){
+    file_close(i);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -275,12 +364,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+  char input[200];
+  char *inputPtr;
+  char* inputName;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+
+  strlcpy(input, file_name, 129);
+  inputName = strtok_r(input, " ", &inputPtr);
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -289,6 +384,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  t -> file_exe = file;
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -366,6 +464,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (!setup_stack (esp, file_name))
     goto done;
 
+  stack_create(file_name, esp);
+
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
@@ -373,7 +473,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  //file_close (file);
   return success;
 }
 

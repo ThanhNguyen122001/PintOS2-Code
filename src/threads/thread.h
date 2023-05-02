@@ -119,6 +119,8 @@ struct thread
     struct semaphore load_sema;
     int exit_status;
     struct file *file_desc_list[FD_SIZE];
+    struct file *file_exe;
+    struct semaphore remove_sema;
 #endif
 
     /* Owned by thread.c. */
