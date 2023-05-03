@@ -23,6 +23,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define FD_SIZE 130
 
 /* A kernel thread or user process.
 
@@ -106,7 +107,18 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
+    struct thread* p_thread;
+    uint32_t *pagedir; /* Page directory */
+    struct list_elem c_thread_elem;
+    struct list child_list;
+    bool l_flag;
+    bool e_flag;
+    struct semaphore exit_sema;
+    struct semaphore load_sema;
+    int exit_status;
+    struct file *file_desc_list[FD_SIZE];
+    struct file *file_exe;
+    struct semaphore remove_sema;
 #endif
 
     /* Owned by thread.c. */
