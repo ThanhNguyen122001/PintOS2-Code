@@ -21,7 +21,6 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void frame_table_destroy (void);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -652,29 +651,4 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
-struct frame_table_entry
-{
-  void *frame; 
-  struct list_elem elem; 
-};
-
-static struct list frame_table; 
-
-void
-frame_table_destroy (void)
-{
-  struct list_elem *e;
-
-  for (e = list_begin (&frame_table); e != list_end (&frame_table);)
-  {
-    struct frame_table_entry *fte = list_entry (e, struct frame_table_entry, elem);
-    e = list_next (e);
-
-    palloc_free_page (fte->frame);
-
-    list_remove (&fte->elem);
-    free (fte);
-  }
 }
