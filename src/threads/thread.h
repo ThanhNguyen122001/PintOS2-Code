@@ -113,7 +113,6 @@ struct thread
     struct list_elem c_thread_elem;
     struct list child_list;
     bool l_flag;
-    bool e_flag;
     struct semaphore exit_sema;
     struct semaphore load_sema;
     int exit_status;

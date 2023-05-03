@@ -14,6 +14,7 @@
 #include "threads/fixed_point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -400,12 +401,59 @@ recalculate_all_priority (void) {
   }
 }
 
+struct thread* get_c_process(pid_t pid){
+  struct thread *c_thread;
+  struct list_elem *c_elem;
+
+  for(c_elem = list_begin(&(thread_current() -> child_list));
+        c_elem != list_end(&(thread_current() -> child_list)); 
+          c_elem = list_next(c_elem)){
+              c_thread = list_entry(c_elem, struct thread, c_thread_elem);
+              if(pid == c_thread -> tid){
+                return c_thread;
+              }
+          }
+  return NULL;
+}
+
 /* Prints thread statistics. */
 void
 thread_print_stats (void) 
 {
   printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
           idle_ticks, kernel_ticks, user_ticks);
+}
+
+/*2023.05.03*/
+#include "threads/palloc.h" // palloc_free_page 함수를 사용하기 위해 헤더 추가
+
+// 프레임 테이블 구조체 정의
+struct frame_table_entry
+{
+  void *frame; // 프레임의 시작 주소
+  struct list_elem elem; // 연결 리스트를 구성하기 위한 구조체
+};
+
+static struct list frame_table; // 프레임 테이블을 관리하는 연결 리스트
+
+void
+frame_table_destroy (void)
+{
+  struct list_elem *e;
+
+  // 연결 리스트를 순회하면서 각 프레임에 할당된 페이지를 해제합니다.
+  for (e = list_begin (&frame_table); e != list_end (&frame_table);)
+  {
+    struct frame_table_entry *fte = list_entry (e, struct frame_table_entry, elem);
+    e = list_next (e);
+
+    // 프레임에 할당된 페이지를 해제합니다.
+    palloc_free_page (fte->frame);
+
+    // 프레임 테이블 항목을 연결 리스트에서 제거하고 메모리를 해제합니다.
+    list_remove (&fte->elem);
+    free (fte);
+  }
 }
 
 /* Creates a new kernel thread named NAME with the given initial
@@ -445,16 +493,30 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+/*2023.05.03*/
+  /* Initialize the page directory. */
+  t->pagedir = pagedir_create ();
+  if (t->pagedir == NULL)
+  {
+    palloc_free_page (t);
+    return TID_ERROR;
+  }
+
+  /*2023.05.03*/
+  /* Initialize the frame table (if necessary). */
+  frame_table_init(); 
+  /*프레임 테이블 초기화 함수를 작성하고 호출하세요.*/
+
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
   old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
-  kf = alloc_frame (t, sizeof *kf);
+  kf = alloc_frame (t, sizeof *kf);/*allocate stack*/
   kf->eip = NULL;
-  kf->function = function;
-  kf->aux = aux;
+  kf->function = function;/*function to run*/
+  kf->aux = aux;/*parameter for the function to run*/
 
   /* Stack frame for switch_entry(). */
   ef = alloc_frame (t, sizeof *ef);
@@ -466,6 +528,8 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   intr_set_level (old_level);
+
+  list_init(&t -> child_list);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -487,6 +551,10 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
+  if(!threading_started){
+    return;
+  }
+
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
 
@@ -564,13 +632,24 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+  /*2023.05.03*/
+  frame_table_destroy();
 #endif
+
+  /* Free the page directory. */
+  /*2023.05.03*/
+  pagedir_destroy (thread_current ()->pagedir);
+
+  /* Free the frame table (if necessary). */
+  // frame_table_destroy(); // 프레임 테이블 해제 함수를 작성하고 호출하세요.
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  sema_up(&(thread_current() -> exit_sema));
+  sema_down(&(thread_current() -> remove_sema));
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -581,8 +660,10 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
-  if(!threading_started)
+  if(!threading_started){
     return;
+  }
+  
   struct thread *cur = thread_current ();
   enum intr_level old_level;
   
@@ -784,6 +865,7 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
+  int i;
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -799,6 +881,18 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Initialize for advanced scheduler */
   t->nice = 0;
   t->recent_cpu = 0;
+
+  #ifdef USERPROG
+  list_init(&(t -> child_list));
+  list_push_back(&(running_thread() -> child_list), &(t -> c_thread_elem));
+  t -> p_thread = running_thread();
+  sema_init(&( t-> exit_sema),0);
+  sema_init(&(t -> load_sema),0);
+  for (i = 0; i < FD_SIZE; i++)
+  {
+    t -> file_desc_list[i] == NULL;
+  }
+  #endif
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);

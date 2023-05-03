@@ -479,7 +479,6 @@ setup_stack (void **esp, char * file_name)
     {
       // *esp -= strlen(token) + 1;
       // memcpy(*esp,token,strlen(token) + 1);
-  
       // argv[i]=*esp;
       total_len = strlen(temp[argc - 1 - i] + 1);
       *esp -= total_len;
