@@ -137,7 +137,7 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
+
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 
@@ -220,6 +220,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
+
+  char *copy = malloc(strlen(file_name) + 1);
+  strlcpy(copy, file_name, strlen(file_name) + 1);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -308,7 +311,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, file_name))
+  // if (!setup_stack (esp, file_name))
+  if (!setup_stack (esp, copy))
     goto done;
 
   /* Start address. */
@@ -321,7 +325,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -456,21 +460,31 @@ setup_stack (void **esp, char * file_name)
   char * copy = malloc(strlen(file_name)+1);
   strlcpy (copy, file_name, strlen(file_name)+1);
 
+  int **temp = malloc(128 * sizeof(int));
 
   for (token = strtok_r (copy, " ", &save_ptr); token != NULL;
-    token = strtok_r (NULL, " ", &save_ptr))
-    argc++;
-
+    token = strtok_r (NULL, " ", &save_ptr)){
+      temp[argc] = malloc(strlen(token) + 1);
+      memcpy(temp[argc++], token, strlen(token) + 1);
+    }
+    
+  temp[argc] = NULL;
 
   int *argv = calloc(argc,sizeof(int));
+
+  int total_len = 0;
 
   for (token = strtok_r (file_name, " ", &save_ptr),i=0; token != NULL;
     token = strtok_r (NULL, " ", &save_ptr),i++)
     {
-      *esp -= strlen(token) + 1;
-      memcpy(*esp,token,strlen(token) + 1);
-
-      argv[i]=*esp;
+      // *esp -= strlen(token) + 1;
+      // memcpy(*esp,token,strlen(token) + 1);
+  
+      // argv[i]=*esp;
+      total_len = strlen(temp[argc - 1 - i] + 1);
+      *esp -= total_len;
+      memcpy(*esp, temp[argc - 1 -i], total_len);
+      argv[argc - 1 - i] = *esp;
     }
 
   while((int)*esp%4!=0)
@@ -500,6 +514,9 @@ setup_stack (void **esp, char * file_name)
 
   *esp-=sizeof(int);
   memcpy(*esp,&zero,sizeof(int));
+
+  free(copy);
+  free(argv);
 
   hex_dump(*esp, *esp, PHYS_BASE - (*esp), true);
 
