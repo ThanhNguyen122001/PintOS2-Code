@@ -14,8 +14,6 @@
 #include "threads/fixed_point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
-#include "userprog/syscall.h"
-#include "userprog/pagedir.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -402,21 +400,6 @@ recalculate_all_priority (void) {
   }
 }
 
-struct thread* get_c_process(pid_t pid){
-  struct thread *c_thread;
-  struct list_elem *c_elem;
-
-  for(c_elem = list_begin(&(thread_current() -> child_list));
-        c_elem != list_end(&(thread_current() -> child_list)); 
-          c_elem = list_next(c_elem)){
-              c_thread = list_entry(c_elem, struct thread, c_thread_elem);
-              if(pid == c_thread -> tid){
-                return c_thread;
-              }
-          }
-  return NULL;
-}
-
 /* Prints thread statistics. */
 void
 thread_print_stats (void) 
@@ -462,13 +445,6 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-   t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL)
-  {
-    palloc_free_page (t);
-    return TID_ERROR;
-  }
-
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -491,8 +467,6 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
-  list_init(&t -> child_list);
-
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -513,15 +487,11 @@ thread_create (const char *name, int priority,
 void
 thread_block (void) 
 {
-  if(threading_started == false){
-    return;
-  }else{
-    ASSERT (!intr_context ());
-    ASSERT (intr_get_level () == INTR_OFF);
+  ASSERT (!intr_context ());
+  ASSERT (intr_get_level () == INTR_OFF);
 
-    thread_current ()->status = THREAD_BLOCKED;
-    schedule ();
-  }
+  thread_current ()->status = THREAD_BLOCKED;
+  schedule ();
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -601,8 +571,6 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
-  sema_up(&(thread_current() -> exit_sema));
-  sema_down(&(thread_current() -> remove_sema));
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -613,22 +581,20 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
-  if(threading_started == false){
+  if(!threading_started)
     return;
-  }else{
-    struct thread *cur = thread_current ();
-    enum intr_level old_level;
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
   
-    ASSERT (!intr_context ());
+  ASSERT (!intr_context ());
 
-    old_level = intr_disable ();
-    if (cur != idle_thread) 
-      // list_push_back (&ready_list, &cur->elem);
-      list_insert_ordered(&ready_list, &cur -> elem, thread_compare_priority, 0);
-    cur->status = THREAD_READY;
-    schedule ();
-    intr_set_level (old_level);
-  }
+  old_level = intr_disable ();
+  if (cur != idle_thread) 
+    // list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered(&ready_list, &cur -> elem, thread_compare_priority, 0);
+  cur->status = THREAD_READY;
+  schedule ();
+  intr_set_level (old_level);
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -818,7 +784,6 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
-  int i;
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
@@ -834,18 +799,6 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Initialize for advanced scheduler */
   t->nice = 0;
   t->recent_cpu = 0;
-
-  #ifdef USERPROG
-  list_init(&(t -> child_list));
-  list_push_back(&(running_thread() -> child_list), &(t -> c_thread_elem));
-  t -> p_thread = running_thread();
-  sema_init(&( t-> exit_sema),0);
-  sema_init(&(t -> load_sema),0);
-  for (i = 0; i < FD_SIZE; i++)
-  {
-    t -> file_desc_list[i] == NULL;
-  }
-  #endif
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
