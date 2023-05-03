@@ -15,6 +15,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/syscall.h"
+#include "userprog/pagedir.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -461,6 +462,15 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+   t->pagedir = pagedir_create ();
+  if (t->pagedir == NULL)
+  {
+    palloc_free_page (t);
+    return TID_ERROR;
+  }
+
+  frame_table_destroy();
+
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -587,6 +597,12 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
+
+  /* Free the page directory. */
+  pagedir_destroy (thread_current ()->pagedir);
+
+  /* Free the frame table (if necessary). */
+  frame_table_destroy();
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
