@@ -11,6 +11,7 @@ void addressChecker(void* address);
 void exit(int status);
 pid_t exec(const char *cmd_line);
 int sys_wait(pid_t pid);
+
 bool create(const char* file, unsigned int initial_size);
 bool remove(const char* file);
 int open(const char* file);

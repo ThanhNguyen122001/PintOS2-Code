@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -30,6 +31,11 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  char temp_fn_copy[200];
+  char *passed_fn;
+  struct list_elem *element;
+  struct thread *curr_thread = thread_current();
+  struct thread *temp_thread;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -40,13 +46,27 @@ process_execute (const char *file_name)
 
   /* Parse file_name for get file_name without arguments */
   char *saveptr;
-  file_name = strtok_r(file_name, " ", &saveptr);
+  strlcpy(temp_fn_copy, file_name, strlen(file_name) + 1);
+  passed_fn = strtok_r(temp_fn_copy, " ", &saveptr);
 
+  if(filesys_open(passed_fn) == NULL){
+    return -1;
+  }
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+  if (tid == TID_ERROR){
+    palloc_free_page (fn_copy);
+  } 
+
+  for(element = list_begin(&curr_thread -> child_list); 
+    element != list_end(&curr_thread -> child_list);
+      element = list_next(element)){
+        temp_thread = list_entry(element, struct thread, c_thread_elem);
+        if(temp_thread -> l_flag == false){
+          return process_wait(tid);
+        }
+      }
   return tid;
 }
 
@@ -66,11 +86,16 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  sema_up(&(thread_current() -> load_sema));
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if (!success){
+    thread_current() -> l_flag = false;
+    exit(-1);
+  }
 
+  thread_current() -> l_flag = true;
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -87,39 +112,24 @@ start_process (void *file_name_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  //while(1);
-  return -1;
-}
+  struct thread *c_thread;
+  struct list_elem *element;
+  int eStatus;
 
-/* Free the current process's resources. */
-void
-process_exit (void)
-{
-  struct thread *cur = thread_current ();
-  uint32_t *pd;
-
-  /* Destroy the current process's page directory and switch back
-     to the kernel-only page directory. */
-  pd = cur->pagedir;
-  if (pd != NULL) 
-    {
-      /* Correct ordering here is crucial.  We must set
-         cur->pagedir to NULL before switching page directories,
-         so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
-         directory before destroying the process's page
-         directory, or our active page directory will be one
-         that's been freed (and cleared). */
-      cur->pagedir = NULL;
-      pagedir_activate (NULL);
-      pagedir_destroy (pd);
-    }
+  c_thread = get_c_process(child_tid);
+  if(c_thread == NULL){
+    return -1;
+  }
+  
+  sema_down(&(c_thread -> exit_sema));
+  eStatus = c_thread -> exit_status;
+  list_remove(&(c_thread -> c_thread_elem));
+  return eStatus;
 }
 
 /* Sets up the CPU for running user code in the current
@@ -220,9 +230,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   off_t file_ofs;
   bool success = false;
   int i;
-
-  char *copy = malloc(strlen(file_name) + 1);
-  strlcpy(copy, file_name, strlen(file_name) + 1);
+  char *fn_copy;
+  char *firstArgs;
+  char *savePtr;
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -230,13 +240,23 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  fn_copy = malloc(sizeof(char)*(strlen(file_name) + 1));
+  strlcpy(fn_copy, file_name, (strlen(file_name)));
+  fn_copy[strlen(file_name)] = '\0';
+  firstArgs = strtok_r(fn_copy, " ", &savePtr);
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (firstArgs);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", firstArgs);
+      free(fn_copy);
       goto done; 
     }
+
+  t -> file_exe = file;
+  file_deny_write(file);
+  free(fn_copy);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -311,8 +331,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  // if (!setup_stack (esp, file_name))
-  if (!setup_stack (esp, copy))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -350,7 +369,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   /* The segment must not be empty. */
   if (phdr->p_memsz == 0)
     return false;
-  
+
   /* The virtual memory region must both start and end within the
      user address space range. */
   if (!is_user_vaddr ((void *) phdr->p_vaddr))
@@ -378,15 +397,11 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
-
         - READ_BYTES bytes at UPAGE must be read from FILE
           starting at offset OFS.
-
         - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
    The pages initialized by this function must be writable by the
    user process if WRITABLE is true, read-only otherwise.
-
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
