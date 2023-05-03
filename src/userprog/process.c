@@ -517,7 +517,6 @@ setup_stack (void **esp, char * file_name)
 
   free(copy);
   free(argv);
-
   hex_dump(*esp, *esp, PHYS_BASE - (*esp), true);
 
   return success;
