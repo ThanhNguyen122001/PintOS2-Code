@@ -4,7 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <threads/synch.h>
+
+#include "threads/synch.h"
+#include "filesys/file.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -24,7 +26,22 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
-#define FD_SIZE 130
+
+struct child_status {
+  tid_t child_id;
+  bool is_exit_called;
+  bool has_been_waited;
+  int child_exit_status;
+  struct list_elem elem_child_status;  
+};
+
+struct waiting_child {
+    tid_t child_id;                          // thread_id
+    int child_exit_status;
+    bool is_terminated_by_kernel;
+    bool has_been_waited;
+    struct list_elem elem_waiting_child;     // itself
+};
 
 /* A kernel thread or user process.
 
@@ -108,17 +125,26 @@ struct thread
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
-    struct thread* p_thread;
-    uint32_t *pagedir; /* Page directory */
-    struct list_elem c_thread_elem;
-    struct list child_list;
-    bool l_flag;
-    struct semaphore exit_sema;
-    struct semaphore load_sema;
-    int exit_status;
-    struct file *file_desc_list[FD_SIZE];
-    struct file *file_exe;
-    struct semaphore remove_sema;
+    uint32_t *pagedir;                  /* Page directory. */
+
+    tid_t parent_id;                    /* parent thread id */
+
+    /* signal to indicate the child's executable-loading status:
+     *  - 0: has not been loaded
+     *  - -1: load failed
+     *  - 1: load success*/
+    int child_load_status;
+
+    /* monitor used to wait the child, owned by wait-syscall and waiting
+       for child to load executable */
+    struct lock lock_child;
+    struct condition cond_child;
+
+    /* list of children, which should be a list of struct child_status */
+    struct list children;
+
+    /* file struct represents the execuatable of the current thread */ 
+    struct file *exec_file;
 #endif
 
     /* Owned by thread.c. */
@@ -181,5 +207,10 @@ int thread_get_nice (void);
 void thread_set_nice (int nice);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* get a thread by it's id */
+struct thread * thread_get_by_id (tid_t);
+
+void thread_yield_current(struct thread *cur);
 
 #endif /* threads/thread.h */
