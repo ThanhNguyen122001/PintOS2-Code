@@ -13,6 +13,7 @@ static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
 /* exit with status -1 for invalid addresses */
 static void exit (int);
+bool handle_mm_fault (struct vm_entry *vme);
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -163,6 +164,12 @@ page_fault (struct intr_frame *f)
           write ? "writing" : "reading",
           user ? "user" : "kernel");
   kill (f);
+}
+
+/* It will handle any page fault problems*/
+bool handle_mm_fault (struct vm_entry *vme)
+{
+  
 }
 
 /* This function is exactly the same as the exit system call inside
