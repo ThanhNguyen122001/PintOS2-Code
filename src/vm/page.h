@@ -5,32 +5,45 @@
 #include <stdint.h>
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/kernel/hash.h"
+#include "devices/block.h"
+#include "lib/stdbool.h"
+#include "filesys/off_t.h"
+#include "filesys/file.h"
 
-enum pageType{
+typedef struct hash hashPageTable;
+
+enum PAGETYPE{
     ELF,  //It is a page of ELF executable file
     General, //It is a page of general file
     Swap //It is a page of swap file
 };
 
-struct vm_entry{
-    enum pageType type;
-    bool isBinaryFile;
-    void *vaddr;
-    uint32_t zeroBytes;
-    uint32_t readBytes;
-    struct file offset;
-    struct file vFile;
-}; 
+enum STATUS{
+    INSTALLED,
+    SWAPPED,
+    FILESYS;
+    ALLZERO;
+}
 
-struct page_table{
-    int64_t virtualPgNumber; //Holds the Virtual Page Number
-    bool ableToRead; //If the page is able to read
-    bool ableToWrite; //If the page is able to write
-    struct hash_elem hash_table_elem;
-	struct file *load_file;
-    int64_t totalAmountData;
-    bool isInMemory;
-};
+struct vm_entry{
+    void *page;
+    void *frame;
+
+    enum STATUS status;
+    enum PAGETYPE pageType;
+
+    struct hash_elem hashElement;
+    struct file *file;
+
+    block_sector_t blockIndex;
+    off_t offset;
+    uint32_t readBytes;
+    uint32_t zeroBytes;
+    bool dirtyVaddr;
+    bool isWritable;
+    
+}; 
 
 bool load_file (void* kaddr, struct vm_entry *vme);
 static bool install_page(void *upage, void *kpage,bool writable);
