@@ -6,6 +6,10 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#ifdef VM
+  #include "vm/page.h"
+#endif
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -129,7 +133,7 @@ page_fault (struct intr_frame *f)
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
-  void *fault_addr;  /* Fault address. */
+  struct vm_entry *fault_addr;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
@@ -152,24 +156,27 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if (!is_valid_ptr (fault_addr))
-    exit (-1);
+  if(!is_valid_ptr(fault_addr) || 
+    is_kernel_vaddr(fault_addr) || 
+      !fault_addr.isWritable){
+        handle_mm_fault(fault_addr);
+      }
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
+  // printf ("Page fault at %p: %s error %s page in %s context.\n",
+  //         fault_addr,
+  //         not_present ? "not present" : "rights violation",
+  //         write ? "writing" : "reading",
+  //         user ? "user" : "kernel");
   kill (f);
 }
 
 /* It will handle any page fault problems*/
 bool handle_mm_fault (struct vm_entry *vme)
 {
-  
+  struct vm_entry *tempVme = &thread_current() -> 
 }
 
 /* This function is exactly the same as the exit system call inside

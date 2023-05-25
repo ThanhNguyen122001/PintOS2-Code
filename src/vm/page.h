@@ -10,20 +10,15 @@
 #include "lib/stdbool.h"
 #include "filesys/off_t.h"
 #include "filesys/file.h"
+#include <hash.h>
 
 typedef struct hash hashPageTable;
-
-enum PAGETYPE{
-    ELF,  //It is a page of ELF executable file
-    General, //It is a page of general file
-    Swap //It is a page of swap file
-};
 
 enum STATUS{
     INSTALLED,
     SWAPPED,
-    FILESYS;
-    ALLZERO;
+    FILESYS,
+    ALLZERO
 }
 
 struct vm_entry{
@@ -31,7 +26,6 @@ struct vm_entry{
     void *frame;
 
     enum STATUS status;
-    enum PAGETYPE pageType;
 
     struct hash_elem hashElement;
     struct file *file;

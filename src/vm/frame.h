@@ -16,6 +16,14 @@ struct frameEntry{
 
     struct hash_elem hashElement;
     struct list_elem listElement;
+
+    bool isPinned;
 }
+
+void frame_init(void);
+void* frame_allocate(enum palloc_flags, void *);
+void frame_free(void *);
+void frame_pin(void);
+void frame_unpin(void);
 
 #endif /* vm/frame.h */
